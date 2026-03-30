@@ -125,7 +125,7 @@ One of the following boards (or a compatible alternative):
 
 All pin assignments are configurable at the top of each sketch. CAN bus connection to the vehicle must run at **500 kbit/s**.
 
-## Installation
+## Flashing
 
 ### 1. Install the Arduino IDE
 
@@ -170,22 +170,7 @@ Near the top of the sketch for your board, change the `HW` define to match your 
 
 ### 6. Wiring
 
-The recommended connection point is the [**X179 connector**](https://service.tesla.com/docs/Model3/ElectricalReference/prog-233/connector/x179/):
-
-| Pin | Signal |
-| --- | ------ |
-| 13  | CAN-H  |
-| 14  | CAN-L  |
-
-Connect your board's CAN-H and CAN-L lines to pins 13 and 14 on the X179 connector.
-
-The recommended connection point for **legacy Model 3 (2020 and earlier)** is the [**X652 connector**](https://service.tesla.com/docs/Model3/ElectricalReference/prog-187/connector/x652/) if the vehicle is not equipped with the X179 port (varies depending on production date):
-| Pin | Signal |
-|-----|--------|
-| 1 | CAN-H |
-| 2 | CAN-L |
-
-Connect your board's CAN-H and CAN-L lines to pins 1 and 2 on the X652 connector.
+See the [Vehicle Installation](#vehicle-installation-2023-tesla-model-3-hw3) guide below for a complete wiring walkthrough with photos. If you're wiring directly (without an Enhance Auto cable), connect to the [**X179 connector**](https://service.tesla.com/docs/Model3/ElectricalReference/prog-233/connector/x179/) — CAN-H on pin 13, CAN-L on pin 14. For **legacy Model 3 (2020 and earlier)**, use the [**X652 connector**](https://service.tesla.com/docs/Model3/ElectricalReference/prog-187/connector/x652/) — CAN-H on pin 1, CAN-L on pin 2.
 
 **Important:** If your board or CAN module has an onboard 120 Ω termination resistor, **cut or remove it**. The vehicle's CAN bus already has its own termination, and adding a second resistor will cause communication errors. This applies to Adafruit Feather CAN boards and many MCP2515 modules.
 
@@ -217,9 +202,9 @@ Because the Legacy variant transmits follow distance differently, it uses a **sp
 
 Open the Serial Monitor at **115200 baud** to see live debug output showing FSD state and the active speed profile. Disable logging by setting `enablePrint = false`.
 
-## Installation Guide (2023 Tesla Model 3 HW3)
+## Vehicle Installation (2023 Tesla Model 3 HW3)
 
-This guide covers a complete installation using the following parts:
+This guide covers my personal setup — a complete vehicle installation using the following parts:
 
 | Part | Link |
 |---|---|
@@ -229,7 +214,7 @@ This guide covers a complete installation using the following parts:
 
 ### Step 1: Flash the firmware
 
-1. Install the **Adafruit SAMD Boards** package and the **Adafruit CAN** library in Arduino IDE (see [Installation](#installation) above).
+1. Install the **Adafruit SAMD Boards** package and the **Adafruit CAN** library in Arduino IDE (see [Flashing](#flashing) above).
 2. Open `boards/FeatherM4CAN/FeatherM4CAN.ino`.
 3. Set `#define HW_TARGET TARGET_HW3` at the top of the sketch.
 4. Connect the Feather via USB and upload.
