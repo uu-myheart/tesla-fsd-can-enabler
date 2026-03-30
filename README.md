@@ -1,5 +1,7 @@
 # Tesla FSD CAN Bus Enabler
 
+> **For the most up to date version of this project, go to [Tesla-OPEN-CAN-MOD](https://gitlab.com/Tesla-OPEN-CAN-MOD/tesla-open-can-mod) on GitLab.** This repo was created for my own installation and port to the Adafruit Feather M4 CAN Express.
+
 > **Background:** This project was inspired by [@mikegapinski](https://x.com/mikegapinski) and his [Tesla Android Diagnostic Tool](https://teslaandroid.com/products/tesla-diagnostic-tool), which enables FSD in regions where it is not yet fully available. I was interested in his product but was put off by the long delivery time and cost. Around the same time I came across a GitLab repository by Starmixcraft that took a simpler, DIY approach. The original repo appeared to be deleted but has since moved to [gitlab.com/Tesla-OPEN-CAN-MOD/tesla-fsd-can-mod](https://gitlab.com/Tesla-OPEN-CAN-MOD/tesla-fsd-can-mod) (the old Starmixcraft URL now redirects there). I picked up the last available version of that project and have been building on it — adding support for more boards and working toward feature parity with commercial solutions. The goal is not to undermine @mikegapinski's work (if you want a polished, plug-and-play product, go buy his tool), but to keep a DIY alternative available for the community.
 
 ## Project Structure
