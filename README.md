@@ -217,16 +217,63 @@ Because the Legacy variant transmits follow distance differently, it uses a **sp
 
 Open the Serial Monitor at **115200 baud** to see live debug output showing FSD state and the active speed profile. Disable logging by setting `enablePrint = false`.
 
-## My Setup
+## Installation Guide (2023 Tesla Model 3 HW3)
 
-I'm personally using an [Adafruit Feather M4 CAN Express with ATSAME51](https://www.antratek.nl/feather-m4-can-express-with-atsame51). It was easy to source, has an onboard MCP25625 CAN controller, and is a great fit for this application.
+This guide covers a complete installation using the following parts:
+
+| Part | Link |
+|---|---|
+| Adafruit Feather M4 CAN Express (ATSAME51) | [antratek.nl](https://www.antratek.nl/feather-m4-can-express-with-atsame51) |
+| EnhAuto Tesla Gen 2 Cable | [enhauto.com](https://www.enhauto.com/products/tesla-gen-2-cable?variant=41214470094923) |
+| 12V/24V to 5V USB-C DC/DC Converter | [aliexpress.com](https://nl.aliexpress.com/item/1005008928142771.html) |
+
+### Step 1: Flash the firmware
+
+1. Install the **Adafruit SAMD Boards** package and the **Adafruit CAN** library in Arduino IDE (see [Installation](#installation) above).
+2. Open `boards/FeatherM4CAN/FeatherM4CAN.ino`.
+3. Set `#define HW_TARGET TARGET_HW3` at the top of the sketch.
+4. Connect the Feather via USB and upload.
+5. Open the Serial Monitor at 115200 baud — you should see `CANSAME5x ready @ 500k`.
+
+### Step 2: Identify the EnhAuto connector pinout
+
+The EnhAuto Gen 2 Cable has a connector on the end that normally plugs into a S3XY Commander. We'll use this connector to tap into the vehicle's CAN bus and 12V power. The pinout is as follows:
+
+![EnhAuto connector pinout](images/pinout-labeled.png)
+
+| Wire | Signal | Connect to |
+|---|---|---|
+| Red | 12V+ | DC/DC converter IN+ |
+| Black | GND | DC/DC converter IN- |
+| Black with stripe | CAN-H (Body Bus) | Feather CAN-H screw terminal |
+| Black solid | CAN-L (Body Bus) | Feather CAN-L screw terminal |
+| Remaining black pair | Other Bus | Not used — leave disconnected |
+
+### Step 3: Wire the board
+
+Connect the EnhAuto cable's CAN-H (black with stripe) and CAN-L (black solid) wires to the Feather's CAN screw terminal. Wire the 12V+ (red) and GND (black) to the DC/DC converter's input. The converter outputs 5V via USB-C, which plugs directly into the Feather to power it.
+
+![Connected setup](images/connected-setup.png)
+
+### Step 4: Connect to the car
+
+The EnhAuto Gen 2 Cable plugs into the **X179 connector**, located behind the driver's side trunk panel. Remove the panel trim to access the connector cluster.
+
+![X179 connector location](images/x179-connector.png)
+
+Plug in the EnhAuto cable — it provides both CAN bus data and 12V power through a single connection. No jumper wires needed.
+
+### Step 5: Verify
+
+1. Close the trunk and start the car.
+2. If you still have USB connected, check the Serial Monitor — you should see handler output like `HW3Handler: FSD: 1, Profile: 2, Offset: 0`.
+3. Enable **"Traffic Light and Stop Sign Control"** in Autopilot settings if not already enabled.
+4. Change the follow-distance setting on the stalk and verify the Profile value changes.
 
 ## Roadmap
 
 This fork aims to expand on the original project:
 
-- **Installation guide** — a step-by-step guide with photos covering wiring, flashing, and verifying the setup.
-- **Proper connector and power** — replace the current jumper-wire setup with a proper connector cable like the [EnhAuto Tesla Gen 2 Cable](https://www.enhauto.com/products/tesla-gen-2-cable?variant=41214470094923), and connect to the same diagnostic port that the [EnhAuto S3XY Commander](https://www.enhauto.com/) uses — providing both CAN bus data and power through a single connection point. This is a similar approach to what [@mikegapinski](https://x.com/mikegapinski) uses with his Tesla Android Diagnostic Tool.
 - **Enclosure** — a 3D-printable or off-the-shelf enclosure to protect the board and make the installation clean and permanent.
 - **More supported boards** — e.g. Teensy 4.x (FlexCAN), STM32 + MCP2515.
 - **New features** — contributions and ideas are welcome via issues and pull requests.

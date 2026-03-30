@@ -134,12 +134,6 @@ struct HW3Handler : public CarManagerBase {
       if (index == 0 && selected) {
         int rawOff = static_cast<uint8_t>((frame.data[3] >> 1) & 0x3F) - 30;
         speedOffset = std::max(std::min(rawOff * 5, 100), 0);
-        switch (rawOff) {
-          case 2: speedProfile = 2; break;
-          case 1: speedProfile = 1; break;
-          case 0: speedProfile = 0; break;
-          default: break;
-        }
         setBit(frame, 46, true);
         setSpeedProfileV12V13(frame, speedProfile);
         sendFrame(frame);

@@ -155,20 +155,6 @@ struct HW3Handler : public CarManagerBase {
       int rawOff = static_cast<uint8_t>((frame.data[3] >> 1) & 0x3F) - 30;
       speedOffset = constrain(rawOff * 5, 0, 100);
 
-      switch (rawOff) {
-        case 2:
-          speedProfile = 2;
-          break;
-        case 1:
-          speedProfile = 1;
-          break;
-        case 0:
-          speedProfile = 0;
-          break;
-        default:
-          break;
-      }
-
       setBit(frame, 46, true);
       setSpeedProfileV12V13(frame, speedProfile);
       sendFrame(frame);
