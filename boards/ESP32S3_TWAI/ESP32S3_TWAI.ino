@@ -95,22 +95,23 @@ inline void sendFrame(can_frame &frame) {
 
 struct LegacyHandler : public CarManagerBase {
   void handleMessage(can_frame &frame) override {
+    // STW_ACTN_RQ (0x045 = 69): Follow-Distance stalk as speed profile source
+    if (frame.can_id == 69) {
+      uint8_t pos = frame.data[1] >> 5;
+      if      (pos <= 1) speedProfile = 2;
+      else if (pos == 2) speedProfile = 1;
+      else               speedProfile = 0;
+      return;
+    }
+
     if (frame.can_id != 1006) {
       return;
     }
 
     uint8_t index = readMuxID(frame);
-    bool selected = isFSDSelectedInUI(frame);
+    if (index == 0) FSDEnabled = isFSDSelectedInUI(frame);
 
-    if (index == 0 && selected) {
-      uint8_t off = static_cast<uint8_t>((frame.data[3] >> 1) & 0x3F) - 30;
-      switch (off) {
-        case 2: speedProfile = 2; break;
-        case 1: speedProfile = 1; break;
-        case 0: speedProfile = 0; break;
-        default: break;
-      }
-
+    if (index == 0 && FSDEnabled) {
       setBit(frame, 46, true);
       setSpeedProfileV12V13(frame, speedProfile);
       sendFrame(frame);
@@ -122,7 +123,7 @@ struct LegacyHandler : public CarManagerBase {
     }
 
     if (index == 0 && enablePrint) {
-      Serial.printf("LegacyHandler: FSD: %d, Profile: %d\n", selected, speedProfile);
+      Serial.printf("LegacyHandler: FSD: %d, Profile: %d\n", FSDEnabled, speedProfile);
     }
   }
 };

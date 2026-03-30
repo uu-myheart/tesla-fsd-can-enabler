@@ -62,7 +62,7 @@ Select your hardware variant via the `#define HW` directive in the sketch for yo
 
 | Define   | Target       | Listens on CAN IDs | Notes                                         |
 | -------- | ------------ | ------------------ | --------------------------------------------- |
-| `LEGACY` | HW3 Retrofit | 1006               | Sets FSD enable bit and speed profile         |
+| `LEGACY` | HW3 Retrofit | 69, 1006            | Sets FSD enable bit and speed profile via follow-distance stalk |
 | `HW3`    | HW3 vehicles | 1016, 1021         | Adds speed-offset control via follow-distance |
 | `HW4`    | HW4 vehicles | 1016, 1021         | Extended speed-profile range (5 levels)       |
 
