@@ -118,7 +118,7 @@ One of the following boards (or a compatible alternative):
 | Board | CAN Interface | Notes |
 |---|---|---|
 | Adafruit Feather RP2040 CAN | MCP25625 (onboard) | Uses board-defined `PIN_CAN_*` constants |
-| Adafruit Feather M4 CAN Express | MCP25625 (onboard) | ATSAME51, requires boost enable (`PIN_CAN_BOOSTEN`) |
+| Adafruit Feather M4 CAN Express | Built-in MCAN controller | ATSAME51 with TJA1051T/3 transceiver, requires boost enable (`PIN_CAN_BOOSTEN`) |
 | ESP32 + MCP2515 module | MCP2515 (external SPI) | Default: CS=GPIO5, INT=GPIO4. Check module crystal (8 vs 16 MHz) |
 | ESP32-S3 + CAN transceiver | Built-in TWAI controller | Only needs a transceiver (e.g. SN65HVD230), no MCP2515 |
 | Arduino UNO + MCP2515 module | MCP2515 (external SPI) | Default: CS=D10, INT=D2. Check module crystal (8 vs 16 MHz) |
@@ -144,18 +144,22 @@ Open **File → Preferences** and add the appropriate URL to **Additional Board 
 
 ### 3. Install Required Libraries
 
-For **MCP2515-based boards** (all except ESP32-S3 TWAI), install the following library via **Sketch → Include Library → Manage Libraries…**:
+Install the required library for your board via **Sketch → Include Library → Manage Libraries…**:
 
-- **MCP2515** by autowp — CAN controller driver (`mcp2515.h`)
-
-The **ESP32-S3 TWAI** variant uses the built-in ESP-IDF TWAI driver and requires no additional libraries.
+| Board | Library | Notes |
+|---|---|---|
+| Adafruit Feather RP2040 CAN | **MCP2515** by autowp | CAN controller driver (`mcp2515.h`) |
+| Adafruit Feather M4 CAN Express | **Adafruit CAN** | CANSAME5x driver (`CANSAME5x.h`) |
+| ESP32 + MCP2515 | **MCP2515** by autowp | CAN controller driver (`mcp2515.h`) |
+| ESP32-S3 | *(none)* | Uses built-in ESP-IDF TWAI driver |
+| Arduino UNO + MCP2515 | **MCP2515** by autowp | CAN controller driver (`mcp2515.h`) |
 
 ### 4. Select Your Hardware Target
 
 Near the top of the sketch for your board, change the `HW` define to match your vehicle:
 
 ```cpp
-#define HW HW3  // Change to LEGACY, HW3, or HW4
+#define HW_TARGET TARGET_HW3  // Change to TARGET_LEGACY, TARGET_HW3, or TARGET_HW4
 ```
 
 ### 5. Upload

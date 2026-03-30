@@ -1,4 +1,10 @@
 /*
+    Feather M4 CAN Express (ATSAME51) variant of the Tesla FSD CAN mod sketch.
+    Uses the ATSAME51's built-in CAN (MCAN) peripheral with the onboard
+    TJA1051T/3 transceiver. No external MCP2515 needed.
+
+    Required library: "Adafruit CAN" (CANSAME5x) via Arduino Library Manager.
+
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -13,10 +19,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "memory"
-#include <SPI.h>
-#include <mcp2515.h>
-
+#include <CANSAME5x.h>
 
 // Compile-time target selection.
 #define TARGET_LEGACY 1
@@ -27,48 +30,46 @@
 
 bool enablePrint = true;
 
-
-#define LED_PIN 13                     // onboard red LED
-#define CAN_CS PIN_CAN_CS              // MCP25625 chip-select
-#define CAN_INT_PIN PIN_CAN_INTERRUPT  // interrupt pin (unused; polling)
+#define LED_PIN 13
 #define CAN_STBY PIN_CAN_STANDBY       // CAN transceiver standby
 #define CAN_BOOST PIN_CAN_BOOSTEN      // CAN boost enable (M4 CAN specific)
 
 // HW4 FSD V14 options
 #define ENABLE_APPROACHING_EMERGENCY_VEHICLE_DETECTION true
 
-std::unique_ptr<MCP2515> mcp;
+CANSAME5x CAN;
 
-inline void sendFrame(can_frame& frame) {
-  MCP2515::ERROR tx = mcp->sendMessage(&frame);
-  if (enablePrint && tx != MCP2515::ERROR_OK) {
-    Serial.printf("sendMessage failed: %d\n", static_cast<int>(tx));
-  }
-}
+// Frame wrapper to keep handler code consistent with other board variants.
+struct can_frame {
+  uint32_t can_id;
+  uint8_t can_dlc;
+  uint8_t data[8];
+};
 
 struct CarManagerBase {
   int speedProfile = 1;
   bool FSDEnabled = false;
-  virtual void handleMessage(can_frame& frame) = 0;
+  virtual void handleMessage(can_frame &frame) = 0;
 };
 
-inline uint8_t readMuxID(const can_frame& frame) {
+inline uint8_t readMuxID(const can_frame &frame) {
   return frame.data[0] & 0x07;
 }
 
-inline bool isFSDSelectedInUI(const can_frame& frame) {
-  return (frame.data[4] >> 6) & 0x01;
+inline bool isFSDSelectedInUI(const can_frame &frame) {
+  return ((frame.data[4] >> 6) & 0x01) != 0;
 }
 
-inline void setSpeedProfileV12V13(can_frame& frame, int profile) {
+inline void setSpeedProfileV12V13(can_frame &frame, int profile) {
   frame.data[6] &= ~0x06;
   frame.data[6] |= (profile << 1);
 }
 
-inline void setBit(can_frame& frame, int bit, bool value) {
+inline void setBit(can_frame &frame, int bit, bool value) {
   int byteIndex = bit / 8;
   int bitIndex = bit % 8;
   uint8_t mask = static_cast<uint8_t>(1U << bitIndex);
+
   if (value) {
     frame.data[byteIndex] |= mask;
   } else {
@@ -76,9 +77,17 @@ inline void setBit(can_frame& frame, int bit, bool value) {
   }
 }
 
+inline void sendFrame(can_frame &frame) {
+  CAN.beginPacket(frame.can_id, frame.can_dlc);
+  CAN.write(frame.data, frame.can_dlc);
+  bool ok = CAN.endPacket();
+  if (enablePrint && !ok) {
+    Serial.println("sendMessage failed");
+  }
+}
 
 struct LegacyHandler : public CarManagerBase {
-  virtual void handleMessage(can_frame& frame) override {
+  void handleMessage(can_frame &frame) override {
     // STW_ACTN_RQ (0x045 = 69): Follow-Distance stalk as speed profile source
     if (frame.can_id == 69) {
       uint8_t pos = frame.data[1] >> 5;
@@ -87,133 +96,143 @@ struct LegacyHandler : public CarManagerBase {
       else               speedProfile = 0;
       return;
     }
-    if (frame.can_id == 1006) {
-      auto index = readMuxID(frame);
-      if (index == 0) FSDEnabled = isFSDSelectedInUI(frame);
-      if (index == 0 && FSDEnabled) {
-        setBit(frame, 46, true);
-        setSpeedProfileV12V13(frame, speedProfile);
-        sendFrame(frame);
-      }
-      if (index == 1) {
-        setBit(frame, 19, false);
-        sendFrame(frame);
-      }
-      if (index == 0 && enablePrint) {
-        Serial.printf("LegacyHandler: FSD: %d, Profile: %d\n", FSDEnabled, speedProfile);
-      }
+
+    if (frame.can_id != 1006) {
+      return;
+    }
+
+    uint8_t index = readMuxID(frame);
+    if (index == 0) FSDEnabled = isFSDSelectedInUI(frame);
+
+    if (index == 0 && FSDEnabled) {
+      setBit(frame, 46, true);
+      setSpeedProfileV12V13(frame, speedProfile);
+      sendFrame(frame);
+    }
+
+    if (index == 1) {
+      setBit(frame, 19, false);
+      sendFrame(frame);
+    }
+
+    if (index == 0 && enablePrint) {
+      Serial.printf("LegacyHandler: FSD: %d, Profile: %d\n", FSDEnabled, speedProfile);
     }
   }
 };
 
 struct HW3Handler : public CarManagerBase {
   int speedOffset = 0;
-  virtual void handleMessage(can_frame& frame) override {
+
+  void handleMessage(can_frame &frame) override {
     if (frame.can_id == 1016) {
-      uint8_t followDistance = (frame.data[5] & 0b11100000) >> 5;
+      uint8_t followDistance = static_cast<uint8_t>((frame.data[5] & 0b11100000) >> 5);
       switch (followDistance) {
-        case 1:
-          speedProfile = 2;
-          break;
-        case 2:
-          speedProfile = 1;
-          break;
-        case 3:
-          speedProfile = 0;
-          break;
-        default:
-          break;
+        case 1: speedProfile = 2; break;
+        case 2: speedProfile = 1; break;
+        case 3: speedProfile = 0; break;
+        default: break;
       }
       return;
     }
-    if (frame.can_id == 1021) {
-      auto index = readMuxID(frame);
-      bool selected = isFSDSelectedInUI(frame);
-      if (index == 0 && selected) {
-        int rawOff = static_cast<uint8_t>((frame.data[3] >> 1) & 0x3F) - 30;
-        speedOffset = std::max(std::min(rawOff * 5, 100), 0);
-        switch (rawOff) {
-          case 2: speedProfile = 2; break;
-          case 1: speedProfile = 1; break;
-          case 0: speedProfile = 0; break;
-          default: break;
-        }
-        setBit(frame, 46, true);
-        setSpeedProfileV12V13(frame, speedProfile);
-        sendFrame(frame);
+
+    if (frame.can_id != 1021) {
+      return;
+    }
+
+    uint8_t index = readMuxID(frame);
+    bool selected = isFSDSelectedInUI(frame);
+
+    if (index == 0 && selected) {
+      int rawOff = static_cast<uint8_t>((frame.data[3] >> 1) & 0x3F) - 30;
+      speedOffset = constrain(rawOff * 5, 0, 100);
+
+      switch (rawOff) {
+        case 2: speedProfile = 2; break;
+        case 1: speedProfile = 1; break;
+        case 0: speedProfile = 0; break;
+        default: break;
       }
-      if (index == 1) {
-        setBit(frame, 19, false);
-        sendFrame(frame);
-      }
-      if (index == 2 && selected) {
-        frame.data[0] &= ~(0b11000000);
-        frame.data[1] &= ~(0b00111111);
-        frame.data[0] |= (speedOffset & 0x03) << 6;
-        frame.data[1] |= (speedOffset >> 2);
-        sendFrame(frame);
-      }
-      if (index == 0 && enablePrint) {
-        Serial.printf("HW3Handler: FSD: %d, Profile: %d, Offset: %d\n", selected, speedProfile, speedOffset);
-      }
+
+      setBit(frame, 46, true);
+      setSpeedProfileV12V13(frame, speedProfile);
+      sendFrame(frame);
+    }
+
+    if (index == 1) {
+      setBit(frame, 19, false);
+      sendFrame(frame);
+    }
+
+    if (index == 2 && selected) {
+      frame.data[0] &= ~(0b11000000);
+      frame.data[1] &= ~(0b00111111);
+      frame.data[0] |= static_cast<uint8_t>((speedOffset & 0x03) << 6);
+      frame.data[1] |= static_cast<uint8_t>(speedOffset >> 2);
+      sendFrame(frame);
+    }
+
+    if (index == 0 && enablePrint) {
+      Serial.printf("HW3Handler: FSD: %d, Profile: %d, Offset: %d\n", selected, speedProfile, speedOffset);
     }
   }
 };
 
 struct HW4Handler : public CarManagerBase {
-  virtual void handleMessage(can_frame& frame) override {
+  void handleMessage(can_frame &frame) override {
     if (frame.can_id == 1016) {
-      auto fd = (frame.data[5] & 0b11100000) >> 5;
-      switch(fd){
+      uint8_t fd = static_cast<uint8_t>((frame.data[5] & 0b11100000) >> 5);
+      switch (fd) {
         case 1: speedProfile = 3; break;
         case 2: speedProfile = 2; break;
         case 3: speedProfile = 1; break;
         case 4: speedProfile = 0; break;
         case 5: speedProfile = 4; break;
+        default: break;
       }
     }
-    if (frame.can_id == 1021) {
-      auto index = readMuxID(frame);
-      bool selected = isFSDSelectedInUI(frame);
-      if (index == 0 && selected) {
-        setBit(frame, 46, true);
-        setBit(frame, 60, true);
-        if (ENABLE_APPROACHING_EMERGENCY_VEHICLE_DETECTION) {
-          setBit(frame, 59, true);
-        }
-        sendFrame(frame);
+
+    if (frame.can_id != 1021) {
+      return;
+    }
+
+    uint8_t index = readMuxID(frame);
+    bool selected = isFSDSelectedInUI(frame);
+
+    if (index == 0 && selected) {
+      setBit(frame, 46, true);
+      setBit(frame, 60, true);
+      if (ENABLE_APPROACHING_EMERGENCY_VEHICLE_DETECTION) {
+        setBit(frame, 59, true);
       }
-      if (index == 1) {
-        setBit(frame, 19, false);
-        setBit(frame, 47, true);
-        sendFrame(frame);
-      }
-      if (index == 2) {
-        frame.data[7] &= ~(0x07 << 4);
-        frame.data[7] |= (speedProfile & 0x07) << 4;
-        sendFrame(frame);
-      }
-      if (index == 0 && enablePrint) {
-        Serial.printf("HW4Handler: FSD: %d, Profile: %d\n", selected, speedProfile);
-      }
+      sendFrame(frame);
+    }
+
+    if (index == 1) {
+      setBit(frame, 19, false);
+      setBit(frame, 47, true);
+      sendFrame(frame);
+    }
+
+    if (index == 2) {
+      frame.data[7] &= ~(0x07 << 4);
+      frame.data[7] |= static_cast<uint8_t>((speedProfile & 0x07) << 4);
+      sendFrame(frame);
+    }
+
+    if (index == 0 && enablePrint) {
+      Serial.printf("HW4Handler: FSD: %d, Profile: %d\n", selected, speedProfile);
     }
   }
 };
 
-
-std::unique_ptr<CarManagerBase> handler;
-
+LegacyHandler legacyHandler;
+HW3Handler hw3Handler;
+HW4Handler hw4Handler;
+CarManagerBase *handler = nullptr;
 
 void setup() {
-#if HW_TARGET == TARGET_LEGACY
-  handler = std::make_unique<LegacyHandler>();
-#elif HW_TARGET == TARGET_HW3
-  handler = std::make_unique<HW3Handler>();
-#elif HW_TARGET == TARGET_HW4
-  handler = std::make_unique<HW4Handler>();
-#else
-  #error Invalid HW selection. Use TARGET_LEGACY, TARGET_HW3, or TARGET_HW4.
-#endif
+  pinMode(LED_PIN, OUTPUT);
 
   // Enable CAN transceiver boost (required on Feather M4 CAN)
   pinMode(CAN_BOOST, OUTPUT);
@@ -223,28 +242,49 @@ void setup() {
   pinMode(CAN_STBY, OUTPUT);
   digitalWrite(CAN_STBY, LOW);
 
-  delay(1500);
   Serial.begin(115200);
-  unsigned long t0 = millis();
-  while (!Serial && millis() - t0 < 1000) {}
+  delay(1200);
 
-  mcp = std::make_unique<MCP2515>(CAN_CS);
+#if HW_TARGET == TARGET_LEGACY
+  handler = &legacyHandler;
+#elif HW_TARGET == TARGET_HW3
+  handler = &hw3Handler;
+#elif HW_TARGET == TARGET_HW4
+  handler = &hw4Handler;
+#else
+  #error Invalid HW selection. Use TARGET_LEGACY, TARGET_HW3, or TARGET_HW4.
+#endif
 
-  mcp->reset();
-  MCP2515::ERROR e = mcp->setBitrate(CAN_500KBPS, MCP_16MHZ);
-  if (e != MCP2515::ERROR_OK) Serial.println("setBitrate failed");
-  mcp->setNormalMode();
-  Serial.println("MCP25625 ready @ 500k");
+  if (!CAN.begin(500000)) {
+    Serial.println("CAN init failed");
+    while (1) {
+      digitalWrite(LED_PIN, HIGH);
+      delay(200);
+      digitalWrite(LED_PIN, LOW);
+      delay(200);
+    }
+  }
+
+  Serial.println("CANSAME5x ready @ 500k");
 }
 
-
 void loop() {
-  can_frame frame;
-  int r = mcp->readMessage(&frame);
-  if (r != MCP2515::ERROR_OK) {
+  int packetSize = CAN.parsePacket();
+  if (packetSize <= 0) {
     digitalWrite(LED_PIN, HIGH);
     return;
   }
+
+  // Convert to can_frame for handler compatibility.
+  can_frame frame;
+  frame.can_id = CAN.packetId();
+  frame.can_dlc = packetSize;
+  for (int i = 0; i < packetSize && i < 8; i++) {
+    frame.data[i] = CAN.read();
+  }
+
   digitalWrite(LED_PIN, LOW);
-  handler->handleMessage(frame);
+  if (handler != nullptr) {
+    handler->handleMessage(frame);
+  }
 }
