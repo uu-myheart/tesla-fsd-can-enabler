@@ -81,6 +81,36 @@ Select your hardware variant via the `#define HW` directive in the sketch for yo
 - **Nag suppression** — clears the hands-on-wheel nag bit.
 - Debug output is printed over Serial at 115200 baud when `enablePrint` is `true`.
 
+### CAN Message Details
+
+The table below shows exactly which CAN messages each hardware variant monitors and what modifications are made.
+
+#### Legacy (HW3 Retrofit)
+
+| CAN ID | Hex | Name | Direction | Mux | Action |
+|---|---|---|---|---|---|
+| 69 | 0x045 | STW_ACTN_RQ | Read only | — | Read follow-distance stalk position → map to speed profile |
+| 1006 | 0x3EE | — | Read + Modify | 0 | Read FSD state from UI; set bit 46 (FSD enable); write speed profile to bits 1–2 of byte 6 |
+| 1006 | 0x3EE | — | Read + Modify | 1 | Clear bit 19 (nag suppression) |
+
+#### HW3
+
+| CAN ID | Hex | Name | Direction | Mux | Action |
+|---|---|---|---|---|---|
+| 1016 | 0x3F8 | — | Read only | — | Read follow-distance setting → map to speed profile |
+| 1021 | 0x3FD | — | Read + Modify | 0 | Read FSD state from UI; calculate speed offset; set bit 46 (FSD enable); write speed profile to bits 1–2 of byte 6 |
+| 1021 | 0x3FD | — | Read + Modify | 1 | Clear bit 19 (nag suppression) |
+| 1021 | 0x3FD | — | Read + Modify | 2 | Write speed offset to bits 6–7 of byte 0 and bits 0–5 of byte 1 |
+
+#### HW4
+
+| CAN ID | Hex | Name | Direction | Mux | Action |
+|---|---|---|---|---|---|
+| 1016 | 0x3F8 | — | Read only | — | Read follow-distance setting → map to speed profile (5 levels) |
+| 1021 | 0x3FD | — | Read + Modify | 0 | Read FSD state from UI; set bit 46 (FSD enable); set bit 60 (FSD V14); set bit 59 (emergency vehicle detection) |
+| 1021 | 0x3FD | — | Read + Modify | 1 | Clear bit 19 (nag suppression); set bit 47 |
+| 1021 | 0x3FD | — | Read + Modify | 2 | Write speed profile to bits 4–6 of byte 7 |
+
 ## Hardware Requirements
 
 One of the following boards (or a compatible alternative):
